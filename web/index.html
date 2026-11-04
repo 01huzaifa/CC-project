@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Northline Goods</title>
+<style>
+  :root { --bg:#f6f4f0; --surface:#fff; --text:#1f2428; --muted:#6a7078; --line:#e2ded7;
+          --accent:#0f6b6b; --accent-d:#0a5252; --danger:#b3382c; --ok:#1f7a45; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#14181a; --surface:#1d2326; --text:#e9ecee; --muted:#9aa3a8; --line:#2e373b;
+            --accent:#4cc2c2; --accent-d:#7ad6d6; --danger:#ff8a7a; --ok:#6fd49a; } }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:system-ui,-apple-system,"Segoe UI",sans-serif; background:var(--bg); color:var(--text); line-height:1.5; }
+  a { color:var(--accent); }
+  .top { display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap;
+         padding:16px 24px; background:var(--surface); border-bottom:1px solid var(--line); }
+  .brand { font-weight:800; font-size:1.25rem; letter-spacing:-.02em; color:var(--text); text-decoration:none; }
+  nav { display:flex; gap:20px; }
+  nav a { text-decoration:none; font-weight:600; color:var(--text); }
+  nav a:hover { color:var(--accent); }
+  main { max-width:960px; margin:0 auto; padding:28px 20px 48px; min-height:60vh; }
+  h1 { font-size:1.75rem; margin:0 0 16px; letter-spacing:-.02em; }
+  h2 { font-size:1.15rem; margin:24px 0 10px; }
+  .toolbar { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:20px; }
+  input, select, textarea { font:inherit; padding:10px 12px; border:1px solid var(--line); border-radius:8px;
+          background:var(--surface); color:var(--text); }
+  input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-visible, a:focus-visible
+    { outline:3px solid var(--accent); outline-offset:2px; }
+  .toolbar input { flex:1; min-width:180px; }
+  button, .btn { font:inherit; font-weight:600; padding:10px 16px; border:0; border-radius:8px; cursor:pointer;
+          background:var(--accent); color:#fff; text-decoration:none; display:inline-block; }
+  button:hover, .btn:hover { background:var(--accent-d); }
+  button:disabled { opacity:.5; cursor:not-allowed; }
+  button.ghost { background:transparent; color:var(--accent); border:1px solid var(--line); }
+  button.link { background:none; color:var(--danger); padding:4px 8px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); gap:16px; }
+  .card { background:var(--surface); border:1px solid var(--line); border-radius:12px; overflow:hidden; display:flex; flex-direction:column; }
+  .pic { font-size:56px; text-align:center; padding:22px 0; background:var(--bg); }
+  .card .body { padding:14px; display:flex; flex-direction:column; gap:6px; flex:1; }
+  .card h3 { margin:0; font-size:1rem; }
+  .card h3 a { color:var(--text); text-decoration:none; }
+  .price { font-weight:700; }
+  .muted { color:var(--muted); font-size:.9rem; }
+  .low { color:var(--danger); } .instock { color:var(--ok); }
+  .card button { margin-top:auto; }
+  .panel { background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:18px; }
+  .detail { display:grid; grid-template-columns:240px 1fr; gap:24px; }
+  .detail .pic { font-size:110px; border-radius:12px; }
+  @media (max-width:640px) { .detail { grid-template-columns:1fr; } }
+  table { width:100%; border-collapse:collapse; }
+  th, td { text-align:left; padding:10px 8px; border-bottom:1px solid var(--line); vertical-align:middle; }
+  td.num, th.num { text-align:right; }
+  .scroll { overflow-x:auto; }
+  .qty { width:70px; }
+  form.stack { display:grid; gap:12px; max-width:460px; }
+  label { display:grid; gap:4px; font-weight:600; font-size:.9rem; }
+  .total { font-size:1.2rem; font-weight:800; text-align:right; margin:14px 0; }
+  #flash { position:fixed; left:50%; transform:translateX(-50%); bottom:24px; padding:10px 18px; border-radius:8px;
+           background:var(--text); color:var(--bg); display:none; z-index:10; max-width:90vw; }
+  #flash.err { background:var(--danger); color:#fff; }
+  footer { text-align:center; padding:18px; color:var(--muted); font-size:.9rem; border-top:1px solid var(--line); }
+  footer strong { color:var(--text); font-family:ui-monospace,Menlo,Consolas,monospace; }
+  .row { display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+</style>
+</head>
+<body>
+<header class="top">
+  <a href="#/" class="brand">Northline Goods</a>
+  <nav>
+    <a href="#/">Shop</a>
+    <a href="#/track">Track order</a>
+    <a href="#/cart" id="cartLink">Cart</a>
+  </nav>
+</header>
+<main id="app"></main>
+<div id="flash" role="status"></div>
+<footer>Served by container <strong id="host">…</strong> &nbsp; <a href="#/admin">Admin</a></footer>
+
+<script>
+"use strict";
+const $app = document.getElementById("app");
+
+// uuid4 without crypto.randomUUID (that needs HTTPS; the ALB is plain HTTP)
+function uuid4() {
+  const b = crypto.getRandomValues(new Uint8Array(16));
+  b[6] = (b[6] & 0x0f) | 0x40; b[8] = (b[8] & 0x3f) | 0x80;
+  const x = [...b].map(n => n.toString(16).padStart(2, "0")).join("");
+  return `${x.slice(0,8)}-${x.slice(8,12)}-${x.slice(12,16)}-${x.slice(16,20)}-${x.slice(20)}`;
+}
+function cartId() {
+  let id = localStorage.getItem("cartId");
+  if (!id) { id = uuid4(); localStorage.setItem("cartId", id); }
+  return id;
+}
+
+const money = c => "$" + (c / 100).toFixed(2);
+
+function h(tag, props = {}, ...kids) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(props)) {
+    if (k === "class") e.className = v;
+    else if (k.startsWith("on")) e.addEventListener(k.slice(2), v);
+    else if (v === true) e.setAttribute(k, "");
+    else if (v !== false && v != null) e.setAttribute(k, v);
+  }
+  for (const kid of kids.flat()) {
+    if (kid == null || kid === false) continue;
+    e.append(kid.nodeType ? kid : document.createTextNode(kid));   // text nodes: no XSS
+  }
+  return e;
+}
+
+let flashTimer;
+function flash(msg, isErr = false) {
+  const f = document.getElementById("flash");
+  f.textContent = msg; f.className = isErr ? "err" : ""; f.style.display = "block";
+  clearTimeout(flashTimer); flashTimer = setTimeout(() => f.style.display = "none", 3000);
+}
+
+async function api(path, opts = {}) {
+  const headers = { "X-Cart-Id": cartId() };
+  const adminToken = sessionStorage.getItem("adminToken");
+  if (adminToken) headers["X-Admin-Token"] = adminToken;
+  if (opts.body) headers["Content-Type"] = "application/json";
+  const res = await fetch(path, { method: opts.method || "GET", headers, body: opts.body ? JSON.stringify(opts.body) : undefined });
+  const data = res.status === 204 ? null : await res.json().catch(() => null);
+  if (!res.ok) throw new Error((data && data.error) || "Request failed (" + res.status + ")");
+  return data;
+}
+
+async function refreshCount() {
+  try {
+    const c = await api("/api/cart");
+    const n = c.items.reduce((s, i) => s + i.qty, 0);
+    document.getElementById("cartLink").textContent = n ? `Cart (${n})` : "Cart";
+  } catch { /* ignore */ }
+}
+
+function stockLabel(p) {
+  if (p.stock <= 0) return h("span", { class: "low" }, "Sold out");
+  if (p.stock <= 5) return h("span", { class: "low" }, `Only ${p.stock} left`);
+  return h("span", { class: "instock" }, "In stock");
+}
+
+async function addToCart(pid, qty = 1) {
+  try { await api("/api/cart/items", { method: "POST", body: { product_id: pid, qty } }); flash("Added to cart"); refreshCount(); }
+  catch (e) { flash(e.message, true); }
+}
+
+// ---------- views ----------
+async function shopView() {
+  const search = h("input", { type: "search", placeholder: "Search products", "aria-label": "Search products" });
+  const cat = h("select", { "aria-label": "Category" }, h("option", { value: "" }, "All categories"));
+  const grid = h("div", { class: "grid" });
+  $app.append(h("h1", {}, "Shop"), h("div", { class: "toolbar" }, search, cat), grid);
+
+  try { (await api("/api/categories")).forEach(c => cat.append(h("option", { value: c }, c))); } catch {}
+
+  async function load() {
+    try {
+      const qs = new URLSearchParams({ q: search.value, category: cat.value });
+      const products = await api("/api/products?" + qs);
+      grid.replaceChildren();
+      if (!products.length) { grid.append(h("p", { class: "muted" }, "No products match your search.")); return; }
+      for (const p of products) {
+        grid.append(h("div", { class: "card" },
+          h("div", { class: "pic" }, p.emoji),
+          h("div", { class: "body" },
+            h("h3", {}, h("a", { href: "#/product/" + p.id }, p.name)),
+            h("div", { class: "muted" }, p.category),
+            h("div", { class: "price" }, money(p.price_cents)),
+            stockLabel(p),
+            h("button", { disabled: p.stock <= 0, onclick: () => addToCart(p.id) }, "Add to cart"))));
+      }
+    } catch (e) { grid.replaceChildren(h("p", { class: "low" }, "Could not load products: " + e.message)); }
+  }
+  let t; search.addEventListener("input", () => { clearTimeout(t); t = setTimeout(load, 250); });
+  cat.addEventListener("change", load);
+  await load();
+}
+
+async function productView(id) {
+  try {
+    const p = await api("/api/products/" + id);
+    const qty = h("input", { type: "number", class: "qty", min: 1, max: Math.max(p.stock, 1), value: 1, "aria-label": "Quantity" });
+    $app.append(h("p", {}, h("a", { href: "#/" }, "← Back to shop")),
+      h("div", { class: "detail" },
+        h("div", { class: "pic" }, p.emoji),
+        h("div", {},
+          h("h1", {}, p.name),
+          h("p", { class: "muted" }, p.category),
+          h("p", {}, p.description),
+          h("p", { class: "price" }, money(p.price_cents)),
+          h("p", {}, stockLabel(p)),
+          h("div", { class: "row" }, qty,
+            h("button", { disabled: p.stock <= 0, onclick: () => addToCart(p.id, parseInt(qty.value) || 1) }, "Add to cart")))));
+  } catch (e) { $app.append(h("p", { class: "low" }, e.message)); }
+}
+
+async function cartView() {
+  $app.append(h("h1", {}, "Your cart"));
+  try {
+    const cart = await api("/api/cart");
+    if (!cart.items.length) {
+      $app.append(h("p", { class: "muted" }, "Your cart is empty."), h("a", { class: "btn", href: "#/" }, "Browse products"));
+      return;
+    }
+    const rows = cart.items.map(i => {
+      const q = h("input", { type: "number", class: "qty", min: 1, max: i.stock, value: i.qty, "aria-label": "Quantity for " + i.name });
+      q.addEventListener("change", async () => {
+        try { await api("/api/cart/items", { method: "PUT", body: { product_id: i.id, qty: parseInt(q.value) || 0 } }); }
+        catch (e) { flash(e.message, true); }
+        route();
+      });
+      return h("tr", {},
+        h("td", {}, i.emoji + " " + i.name), h("td", {}, q),
+        h("td", { class: "num" }, money(i.price_cents)), h("td", { class: "num" }, money(i.price_cents * i.qty)),
+        h("td", {}, h("button", { class: "link", onclick: async () => { await api("/api/cart/items", { method: "PUT", body: { product_id: i.id, qty: 0 } }); route(); } }, "Remove")));
+    });
+    $app.append(
+      h("div", { class: "panel scroll" }, h("table", {},
+        h("thead", {}, h("tr", {}, h("th", {}, "Item"), h("th", {}, "Qty"), h("th", { class: "num" }, "Price"), h("th", { class: "num" }, "Subtotal"), h("th", {}))),
+        h("tbody", {}, rows))),
+      h("div", { class: "total" }, "Total: " + money(cart.total_cents)),
+      h("div", { class: "row" }, h("a", { class: "btn", href: "#/checkout" }, "Checkout"), h("a", { href: "#/" }, "Keep shopping")));
+  } catch (e) { $app.append(h("p", { class: "low" }, e.message)); }
+}
+
+async function checkoutView() {
+  $app.append(h("h1", {}, "Checkout"));
+  let cart;
+  try { cart = await api("/api/cart"); } catch (e) { $app.append(h("p", { class: "low" }, e.message)); return; }
+  if (!cart.items.length) { $app.append(h("p", { class: "muted" }, "Your cart is empty."), h("a", { class: "btn", href: "#/" }, "Browse products")); return; }
+
+  const f = {
+    name: h("input", { required: true, maxlength: 120, autocomplete: "name" }),
+    email: h("input", { type: "email", required: true, autocomplete: "email" }),
+    address: h("textarea", { required: true, rows: 3, maxlength: 300, autocomplete: "street-address" }),
+  };
+  const btn = h("button", { type: "submit" }, "Place order (" + money(cart.total_cents) + ")");
+  const form = h("form", { class: "stack" },
+    h("label", {}, "Full name", f.name), h("label", {}, "Email", f.email), h("label", {}, "Delivery address", f.address), btn);
+  form.addEventListener("submit", async e => {
+    e.preventDefault(); btn.disabled = true;
+    try {
+      const r = await api("/api/checkout", { method: "POST", body: { name: f.name.value, email: f.email.value, address: f.address.value } });
+      sessionStorage.setItem("lastEmail", f.email.value.trim().toLowerCase());
+      location.hash = "#/order/" + r.order_id;
+    } catch (err) { flash(err.message, true); btn.disabled = false; }
+  });
+  $app.append(h("div", { class: "panel" }, h("h2", {}, "Order summary"),
+    cart.items.map(i => h("div", {}, `${i.qty} × ${i.name} — ${money(i.price_cents * i.qty)}`)),
+    h("p", { class: "price" }, "Total: " + money(cart.total_cents))), h("h2", {}, "Your details"), form);
+}
+
+function renderOrder(o) {
+  return h("div", { class: "panel" },
+    h("h2", {}, `Order #${o.id}`),
+    h("p", { class: "muted" }, `${o.status} on ${new Date(o.created_at).toLocaleString()} for ${o.customer_name}`),
+    h("div", { class: "scroll" }, h("table", {}, h("tbody", {},
+      o.items.map(i => h("tr", {}, h("td", {}, i.name), h("td", {}, "× " + i.qty), h("td", { class: "num" }, money(i.price_cents * i.qty))))))),
+    h("div", { class: "total" }, "Total: " + money(o.total_cents)),
+    h("p", { class: "muted" }, "Ship to: " + o.address));
+}
+
+async function orderView(id) {
+  const email = sessionStorage.getItem("lastEmail");
+  if (!email) { location.hash = "#/track"; return; }
+  try {
+    const o = await api(`/api/orders/${id}?email=${encodeURIComponent(email)}`);
+    $app.append(h("h1", {}, "Thank you for your order"), renderOrder(o), h("p", {}, h("a", { href: "#/" }, "Continue shopping")));
+  } catch (e) { $app.append(h("p", { class: "low" }, e.message)); }
+}
+
+function trackView() {
+  const id = h("input", { type: "number", min: 1, required: true });
+  const email = h("input", { type: "email", required: true });
+  const out = h("div");
+  const form = h("form", { class: "stack" }, h("label", {}, "Order number", id), h("label", {}, "Email used at checkout", email), h("button", { type: "submit" }, "Find order"));
+  form.addEventListener("submit", async e => {
+    e.preventDefault(); out.replaceChildren();
+    try { out.append(renderOrder(await api(`/api/orders/${id.value}?email=${encodeURIComponent(email.value.trim())}`))); }
+    catch (err) { out.append(h("p", { class: "low" }, err.message)); }
+  });
+  $app.append(h("h1", {}, "Track an order"), form, out);
+}
+
+async function adminView() {
+  $app.append(h("h1", {}, "Admin"));
+  if (!sessionStorage.getItem("adminToken")) {
+    const tok = h("input", { type: "password", required: true, autocomplete: "off" });
+    const form = h("form", { class: "stack" }, h("label", {}, "Admin token", tok), h("button", { type: "submit" }, "Sign in"));
+    form.addEventListener("submit", e => { e.preventDefault(); sessionStorage.setItem("adminToken", tok.value); route(); });
+    $app.append(form); return;
+  }
+  let orders;
+  try { orders = await api("/api/admin/orders"); }
+  catch (e) { sessionStorage.removeItem("adminToken"); flash(e.message, true); route(); return; }
+
+  const products = await api("/api/products");
+  const f = { name: h("input", { required: true }), price: h("input", { type: "number", step: "0.01", min: 0, required: true }),
+              stock: h("input", { type: "number", min: 0, required: true, value: 10 }), category: h("input", { value: "General" }),
+              emoji: h("input", { value: "📦", maxlength: 4 }), desc: h("input", {}) };
+  const add = h("form", { class: "stack" }, h("h2", {}, "Add product"),
+    h("label", {}, "Name", f.name), h("label", {}, "Description", f.desc), h("label", {}, "Price (USD)", f.price),
+    h("label", {}, "Stock", f.stock), h("label", {}, "Category", f.category), h("label", {}, "Emoji", f.emoji),
+    h("button", { type: "submit" }, "Add product"));
+  add.addEventListener("submit", async e => {
+    e.preventDefault();
+    try {
+      await api("/api/admin/products", { method: "POST", body: { name: f.name.value, description: f.desc.value,
+        price_cents: Math.round(parseFloat(f.price.value) * 100), stock: parseInt(f.stock.value), category: f.category.value, emoji: f.emoji.value } });
+      flash("Product added"); route();
+    } catch (err) { flash(err.message, true); }
+  });
+
+  const stockRows = products.map(p => {
+    const s = h("input", { type: "number", class: "qty", min: 0, value: p.stock, "aria-label": "Stock for " + p.name });
+    s.addEventListener("change", async () => {
+      try { await api(`/api/admin/products/${p.id}/stock`, { method: "PUT", body: { stock: parseInt(s.value) } }); flash("Stock updated"); }
+      catch (e) { flash(e.message, true); }
+    });
+    return h("tr", {}, h("td", {}, p.emoji + " " + p.name), h("td", { class: "num" }, money(p.price_cents)), h("td", {}, s));
+  });
+
+  $app.append(
+    h("div", { class: "row" }, h("button", { class: "ghost", onclick: () => { sessionStorage.removeItem("adminToken"); route(); } }, "Sign out")),
+    h("h2", {}, "Recent orders"),
+    h("div", { class: "panel scroll" }, orders.length ? h("table", {},
+      h("thead", {}, h("tr", {}, h("th", {}, "#"), h("th", {}, "Customer"), h("th", {}, "Email"), h("th", { class: "num" }, "Total"), h("th", {}, "Placed"))),
+      h("tbody", {}, orders.map(o => h("tr", {}, h("td", {}, o.id), h("td", {}, o.customer_name), h("td", {}, o.email),
+        h("td", { class: "num" }, money(o.total_cents)), h("td", {}, new Date(o.created_at).toLocaleString()))))) : h("p", { class: "muted" }, "No orders yet.")),
+    h("h2", {}, "Stock levels"),
+    h("div", { class: "panel scroll" }, h("table", {}, h("tbody", {}, stockRows))),
+    add);
+}
+
+// ---------- router ----------
+const routes = [
+  [/^#\/product\/(\d+)$/, productView], [/^#\/cart$/, cartView], [/^#\/checkout$/, checkoutView],
+  [/^#\/order\/(\d+)$/, orderView], [/^#\/track$/, trackView], [/^#\/admin$/, adminView],
+];
+async function route() {
+  $app.replaceChildren();
+  const hash = location.hash || "#/";
+  let view = shopView, args = [];
+  for (const [re, fn] of routes) { const m = hash.match(re); if (m) { view = fn; args = m.slice(1); break; } }
+  await view(...args);
+  window.scrollTo(0, 0);
+  refreshCount();
+}
+window.addEventListener("hashchange", route);
+api("/api/info").then(d => document.getElementById("host").textContent = d.hostname).catch(() => {});
+route();
+</script>
+</body>
+</html>
