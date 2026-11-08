@@ -153,7 +153,7 @@ async function shopView() {
   const search = h("input", { type: "search", placeholder: "Search products", "aria-label": "Search products" });
   const cat = h("select", { "aria-label": "Category" }, h("option", { value: "" }, "All categories"));
   const grid = h("div", { class: "grid" });
-  $app.append(h("h1", {}, "Shop"), h("div", { class: "toolbar" }, search, cat), grid);
+  $app.append(h("h1", {}, "Shop - v2"), h("div", { class: "toolbar" }, search, cat), grid);
 
   try { (await api("/api/categories")).forEach(c => cat.append(h("option", { value: c }, c))); } catch {}
 

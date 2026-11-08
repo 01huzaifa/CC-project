@@ -377,7 +377,7 @@ def admin_orders():
         r["created_at"] = r["created_at"].isoformat()
     return jsonify(rows)
 
-
 @app.errorhandler(pymysql.err.OperationalError)
-def db_down(_e):
+def db_down(e):
+    app.logger.error("Database error: %s", e)
     return jsonify(error="database unavailable"), 503
